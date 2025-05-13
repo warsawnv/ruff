@@ -11,6 +11,7 @@ use crate::comments::SourceComment;
 use crate::context::NodeLevel;
 use crate::prelude::*;
 use crate::statement::suite::should_insert_blank_line_after_class_in_stub_file;
+use crate::options::CommentColumn;
 
 /// Formats the leading comments of a node.
 pub(crate) fn leading_node_comments<'a, T>(node: T) -> FormatLeadingComments<'a>
@@ -391,13 +392,36 @@ impl Format<PyFormatContext<'_>> for FormatTrailingEndOfLineComment<'_> {
             width
         };
 
+        // Calculate the target column for the comment based on the comment-column setting
+        let spaces = match f.options().comment_column() {
+            CommentColumn::Preserve => 2, // Default to 2 spaces if preserving
+            CommentColumn::Plus2 => 2, // Always use 2 spaces for +2 mode
+            CommentColumn::Column60 => {
+                if !is_pragma_comment(&normalized_comment) {
+                    // Get the current column of the comment
+                    let comment_start = self.comment.slice().start().to_usize();
+                    let source_text = f.context().source();
+                    let line_start = source_text[..comment_start].rfind('\n').map_or(0, |pos| pos + 1);
+                    let current_column = comment_start - line_start;
+                    if current_column < 60 {
+                        60 - current_column
+                    } else {
+                        2 // Default to 2 spaces if we're already past the target column
+                    }
+                } else {
+                    2 // Default to 2 spaces for pragma comments
+                }
+            }
+        };
+
+        // Write the correct number of spaces
         write!(
             f,
             [
                 line_suffix(
                     &format_args![
                         space(),
-                        space(),
+                        text(&" ".repeat(spaces)),
                         format_normalized_comment(normalized_comment, slice.range())
                     ],
                     reserved_width

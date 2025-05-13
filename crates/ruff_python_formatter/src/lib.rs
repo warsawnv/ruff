@@ -19,7 +19,7 @@ pub use crate::context::PyFormatContext;
 pub use crate::db::Db;
 pub use crate::options::{
     DocstringCode, DocstringCodeLineWidth, MagicTrailingComma, PreviewMode, PyFormatOptions,
-    QuoteStyle,
+    QuoteStyle, CommentColumn,
 };
 use crate::range::is_logical_line;
 pub use crate::shared_traits::{AsFormat, FormattedIter, FormattedIterExt, IntoFormat};

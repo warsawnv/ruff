@@ -62,6 +62,10 @@ pub struct PyFormatOptions {
 
     /// Whether preview style formatting is enabled or not
     preview: PreviewMode,
+
+    /// The column at which to align comments, or whether to preserve their original indentation.
+    #[cfg_attr(feature = "serde", serde(default))]
+    comment_column: CommentColumn,
 }
 
 fn default_line_width() -> LineWidth {
@@ -91,6 +95,7 @@ impl Default for PyFormatOptions {
             docstring_code: DocstringCode::default(),
             docstring_code_line_width: DocstringCodeLineWidth::default(),
             preview: PreviewMode::default(),
+            comment_column: CommentColumn::default(),
         }
     }
 }
@@ -142,6 +147,10 @@ impl PyFormatOptions {
 
     pub const fn preview(&self) -> PreviewMode {
         self.preview
+    }
+
+    pub const fn comment_column(&self) -> CommentColumn {
+        self.comment_column
     }
 
     #[must_use]
@@ -207,6 +216,12 @@ impl PyFormatOptions {
     #[must_use]
     pub fn with_source_map_generation(mut self, source_map: SourceMapGeneration) -> Self {
         self.source_map_generation = source_map;
+        self
+    }
+
+    #[must_use]
+    pub fn with_comment_column(mut self, comment_column: CommentColumn) -> Self {
+        self.comment_column = comment_column;
         self
     }
 }
@@ -466,5 +481,58 @@ where
             serde::de::Unexpected::Str(s),
             &"dynamic",
         )),
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, CacheKey, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+pub enum CommentColumn {
+    /// Align comments 2 spaces after the end of the code (Black's default)
+    #[default]
+    Plus2,
+    /// Align comments at column 60
+    Column60,
+    /// Don't align comments, preserve their original indentation
+    Preserve,
+}
+
+impl CommentColumn {
+    pub const fn is_preserve(self) -> bool {
+        matches!(self, CommentColumn::Preserve)
+    }
+
+    pub const fn column(self) -> Option<u32> {
+        match self {
+            CommentColumn::Plus2 => None,
+            CommentColumn::Column60 => Some(60),
+            CommentColumn::Preserve => None,
+        }
+    }
+
+    pub const fn is_plus2(self) -> bool {
+        matches!(self, CommentColumn::Plus2)
+    }
+}
+
+impl fmt::Display for CommentColumn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Plus2 => write!(f, "+2"),
+            Self::Column60 => write!(f, "60"),
+            Self::Preserve => write!(f, "preserve"),
+        }
+    }
+}
+
+impl FromStr for CommentColumn {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "+2" => Ok(Self::Plus2),
+            "60" => Ok(Self::Column60),
+            "preserve" | "Preserve" => Ok(Self::Preserve),
+            _ => Err("Value not supported for CommentColumn"),
+        }
     }
 }

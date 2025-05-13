@@ -189,6 +189,8 @@ pub struct FormatterSettings {
 
     pub docstring_code_format: DocstringCode,
     pub docstring_code_line_width: DocstringCodeLineWidth,
+    /// The column at which to align comments, or whether to preserve their original indentation.
+    pub comment_column: ruff_python_formatter::CommentColumn,
 }
 
 impl FormatterSettings {
@@ -234,6 +236,7 @@ impl FormatterSettings {
             .with_line_width(self.line_width)
             .with_docstring_code(self.docstring_code_format)
             .with_docstring_code_line_width(self.docstring_code_line_width)
+            .with_comment_column(self.comment_column)
     }
 
     /// Resolve the [`PythonVersion`] to use for formatting.
@@ -251,7 +254,6 @@ impl FormatterSettings {
 impl Default for FormatterSettings {
     fn default() -> Self {
         let default_options = PyFormatOptions::default();
-
         Self {
             exclude: FilePatternSet::default(),
             extension: ExtensionMapping::default(),
@@ -266,6 +268,7 @@ impl Default for FormatterSettings {
             magic_trailing_comma: default_options.magic_trailing_comma(),
             docstring_code_format: default_options.docstring_code(),
             docstring_code_line_width: default_options.docstring_code_line_width(),
+            comment_column: ruff_python_formatter::CommentColumn::default(),
         }
     }
 }
@@ -289,6 +292,7 @@ impl fmt::Display for FormatterSettings {
                 self.magic_trailing_comma,
                 self.docstring_code_format,
                 self.docstring_code_line_width,
+                self.comment_column,
             ]
         }
         Ok(())
@@ -296,9 +300,8 @@ impl fmt::Display for FormatterSettings {
 }
 
 #[derive(
-    Copy, Clone, Debug, Eq, PartialEq, Default, CacheKey, serde::Serialize, serde::Deserialize,
+    Copy, Clone, Debug, Eq, PartialEq, Default, CacheKey, serde::Serialize, serde::Deserialize
 )]
-#[serde(rename_all = "kebab-case")]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum LineEnding {
     /// The newline style is detected automatically on a file per file basis.

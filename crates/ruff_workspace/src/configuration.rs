@@ -42,7 +42,7 @@ use ruff_linter::{
 };
 use ruff_python_ast as ast;
 use ruff_python_formatter::{
-    DocstringCode, DocstringCodeLineWidth, MagicTrailingComma, QuoteStyle,
+    DocstringCode, DocstringCodeLineWidth, MagicTrailingComma, QuoteStyle, CommentColumn,
 };
 
 use crate::options::{
@@ -173,10 +173,19 @@ impl Configuration {
         let format = self.format;
         let format_defaults = FormatterSettings::default();
 
-        let quote_style = format.quote_style.unwrap_or(format_defaults.quote_style);
-        let format_preview = match format.preview.unwrap_or(global_preview) {
-            PreviewMode::Disabled => ruff_python_formatter::PreviewMode::Disabled,
-            PreviewMode::Enabled => ruff_python_formatter::PreviewMode::Enabled,
+        let quote_style = match format.quote_style {
+            Some(style) => style,
+            None => format_defaults.quote_style,
+        };
+        let format_preview = match format.preview {
+            Some(preview) => match preview {
+                PreviewMode::Disabled => ruff_python_formatter::PreviewMode::Disabled,
+                PreviewMode::Enabled => ruff_python_formatter::PreviewMode::Enabled,
+            },
+            None => match global_preview {
+                PreviewMode::Disabled => ruff_python_formatter::PreviewMode::Disabled,
+                PreviewMode::Enabled => ruff_python_formatter::PreviewMode::Enabled,
+            },
         };
 
         let per_file_target_version = CompiledPerFileTargetVersionList::resolve(
@@ -195,8 +204,14 @@ impl Configuration {
                 .map_or(format_defaults.line_width, |length| {
                     ruff_formatter::LineWidth::from(NonZeroU16::from(length))
                 }),
-            line_ending: format.line_ending.unwrap_or(format_defaults.line_ending),
-            indent_style: format.indent_style.unwrap_or(format_defaults.indent_style),
+            line_ending: match format.line_ending {
+                Some(ending) => ending,
+                None => format_defaults.line_ending,
+            },
+            indent_style: match format.indent_style {
+                Some(style) => style,
+                None => format_defaults.indent_style,
+            },
             indent_width: self
                 .indent_width
                 .map_or(format_defaults.indent_width, |tab_size| {
@@ -206,12 +221,15 @@ impl Configuration {
             magic_trailing_comma: format
                 .magic_trailing_comma
                 .unwrap_or(format_defaults.magic_trailing_comma),
-            docstring_code_format: format
-                .docstring_code_format
-                .unwrap_or(format_defaults.docstring_code_format),
-            docstring_code_line_width: format
-                .docstring_code_line_width
-                .unwrap_or(format_defaults.docstring_code_line_width),
+            docstring_code_format: match format.docstring_code_format {
+                Some(format) => format,
+                None => format_defaults.docstring_code_format,
+            },
+            docstring_code_line_width: match format.docstring_code_line_width {
+                Some(width) => width,
+                None => format_defaults.docstring_code_line_width,
+            },
+            comment_column: format.comment_column,
         };
 
         let analyze = self.analyze;
@@ -558,10 +576,7 @@ impl Configuration {
             extension: None,
 
             lint: LintConfiguration::from_options(lint, project_root)?,
-            format: FormatConfiguration::from_options(
-                options.format.unwrap_or_default(),
-                project_root,
-            )?,
+            format: FormatConfiguration::from_options(options.format.unwrap_or_default()),
             analyze: AnalyzeConfiguration::from_options(
                 options.analyze.unwrap_or_default(),
                 project_root,
@@ -1180,71 +1195,61 @@ impl LintConfiguration {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Clone)]
 pub struct FormatConfiguration {
-    pub exclude: Option<Vec<FilePattern>>,
-    pub preview: Option<PreviewMode>,
-    pub extension: Option<ExtensionMapping>,
-
-    pub indent_style: Option<IndentStyle>,
-    pub quote_style: Option<QuoteStyle>,
-    pub magic_trailing_comma: Option<MagicTrailingComma>,
-    pub line_ending: Option<LineEnding>,
-    pub docstring_code_format: Option<DocstringCode>,
-    pub docstring_code_line_width: Option<DocstringCodeLineWidth>,
+    pub exclude: Vec<String>,
+    pub preview: bool,
+    pub indent_style: IndentStyle,
+    pub quote_style: QuoteStyle,
+    pub skip_magic_trailing_comma: bool,
+    pub line_ending: LineEnding,
+    pub docstring_code_format: bool,
+    pub docstring_code_line_width: usize,
+    pub comment_column: CommentColumn,
 }
 
-impl FormatConfiguration {
-    pub fn from_options(options: FormatOptions, project_root: &Path) -> Result<Self> {
-        Ok(Self {
-            // `--extension` is a hidden command-line argument that isn't supported in configuration
-            // files at present.
-            extension: None,
-            exclude: options.exclude.map(|paths| {
-                paths
-                    .into_iter()
-                    .map(|pattern| {
-                        let absolute = GlobPath::normalize(&pattern, project_root);
-                        FilePattern::User(pattern, absolute)
-                    })
-                    .collect()
-            }),
-            preview: options.preview.map(PreviewMode::from),
-            indent_style: options.indent_style,
-            quote_style: options.quote_style,
-            magic_trailing_comma: options.skip_magic_trailing_comma.map(|skip| {
-                if skip {
-                    MagicTrailingComma::Ignore
-                } else {
-                    MagicTrailingComma::Respect
-                }
-            }),
-            line_ending: options.line_ending,
-            docstring_code_format: options.docstring_code_format.map(|yes| {
-                if yes {
-                    DocstringCode::Enabled
-                } else {
-                    DocstringCode::Disabled
-                }
-            }),
-            docstring_code_line_width: options.docstring_code_line_length,
-        })
-    }
-
-    #[must_use]
-    pub fn combine(self, config: Self) -> Self {
+impl Default for FormatConfiguration {
+    fn default() -> Self {
         Self {
-            exclude: self.exclude.or(config.exclude),
-            preview: self.preview.or(config.preview),
-            extension: self.extension.or(config.extension),
-            indent_style: self.indent_style.or(config.indent_style),
-            quote_style: self.quote_style.or(config.quote_style),
-            magic_trailing_comma: self.magic_trailing_comma.or(config.magic_trailing_comma),
-            line_ending: self.line_ending.or(config.line_ending),
-            docstring_code_format: self.docstring_code_format.or(config.docstring_code_format),
-            docstring_code_line_width: self
-                .docstring_code_line_width
-                .or(config.docstring_code_line_width),
+            exclude: Vec::new(),
+            preview: false,
+            indent_style: IndentStyle::Space,
+            quote_style: QuoteStyle::Double,
+            skip_magic_trailing_comma: false,
+            line_ending: LineEnding::Auto,
+            docstring_code_format: true,
+            docstring_code_line_width: 60,
+            comment_column: CommentColumn::Plus2,
+        }
+    }
+}
+
+pub fn from_options(options: FormatOptions) -> Self {
+    Self {
+        exclude: options.exclude.unwrap_or_default(),
+        preview: options.preview.unwrap_or_default(),
+        indent_style: options.indent_style.unwrap_or_default(),
+        quote_style: options.quote_style.unwrap_or_default(),
+        skip_magic_trailing_comma: options.skip_magic_trailing_comma.unwrap_or_default(),
+        line_ending: options.line_ending.unwrap_or_default(),
+        docstring_code_format: options.docstring_code_format.unwrap_or_default(),
+        docstring_code_line_width: options.docstring_code_line_width.unwrap_or_default(),
+        comment_column: options.comment_column.unwrap_or_default(),
+    }
+}
+
+impl CombinePluginOptions for FormatConfiguration {
+    fn combine(self, other: Self) -> Self {
+        Self {
+            exclude: self.exclude,
+            preview: self.preview || other.preview,
+            indent_style: other.indent_style,
+            quote_style: other.quote_style,
+            skip_magic_trailing_comma: self.skip_magic_trailing_comma || other.skip_magic_trailing_comma,
+            line_ending: other.line_ending,
+            docstring_code_format: self.docstring_code_format || other.docstring_code_format,
+            docstring_code_line_width: other.docstring_code_line_width,
+            comment_column: other.comment_column,
         }
     }
 }
