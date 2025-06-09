@@ -1,28 +1,11 @@
+<!-- WARNING: This file is auto-generated (cargo dev generate-all). Update the doc comments on the 'Options' struct in 'crates/ty_project/src/metadata/options.rs' if you want to change anything here. -->
+
 # Configuration
-#### [`respect-ignore-files`]
-
-Whether to automatically exclude files that are ignored by `.ignore`,
-`.gitignore`, `.git/info/exclude`, and global `gitignore` files.
-Enabled by default.
-
-**Default value**: `true`
-
-**Type**: `bool`
-
-**Example usage** (`pyproject.toml`):
-
-```toml
-[tool.ty]
-respect-ignore-files = false
-```
-
----
-
-#### [`rules`]
+#### `rules`
 
 Configures the enabled rules and their severity.
 
-See [the rules documentation](https://github.com/astral-sh/ty/blob/main/docs/rules.md) for a list of all available rules.
+See [the rules documentation](https://ty.dev/rules) for a list of all available rules.
 
 Valid severities are:
 
@@ -47,7 +30,7 @@ division-by-zero = "ignore"
 
 ## `environment`
 
-#### [`extra-paths`]
+#### `extra-paths`
 
 List of user-provided paths that should take first priority in the module resolution.
 Examples in other type checkers are mypy's `MYPYPATH` environment variable,
@@ -66,7 +49,7 @@ extra-paths = ["~/shared/my-search-path"]
 
 ---
 
-#### [`python`]
+#### `python`
 
 Path to the Python installation from which ty resolves type information and third-party dependencies.
 
@@ -88,11 +71,12 @@ python = "./.venv"
 
 ---
 
-#### [`python-platform`]
+#### `python-platform`
 
 Specifies the target platform that will be used to analyze the source code.
 If specified, ty will understand conditions based on comparisons with `sys.platform`, such
 as are commonly found in typeshed to reflect the differing contents of the standard library across platforms.
+If `all` is specified, ty will assume that the source code can run on any platform.
 
 If no platform is specified, ty will use the current platform:
 - `win32` for Windows
@@ -103,7 +87,7 @@ If no platform is specified, ty will use the current platform:
 
 **Default value**: `<current-platform>`
 
-**Type**: `"win32" | "darwin" | "android" | "ios" | "linux" | str`
+**Type**: `"win32" | "darwin" | "android" | "ios" | "linux" | "all" | str`
 
 **Example usage** (`pyproject.toml`):
 
@@ -115,16 +99,25 @@ python-platform = "win32"
 
 ---
 
-#### [`python-version`]
+#### `python-version`
 
 Specifies the version of Python that will be used to analyze the source code.
 The version should be specified as a string in the format `M.m` where `M` is the major version
 and `m` is the minor (e.g. `"3.0"` or `"3.6"`).
 If a version is provided, ty will generate errors if the source code makes use of language features
 that are not supported in that version.
-It will also understand conditionals based on comparisons with `sys.version_info`, such
-as are commonly found in typeshed to reflect the differing contents of the standard
-library across Python versions.
+
+If a version is not specified, ty will try the following techniques in order of preference
+to determine a value:
+1. Check for the `project.requires-python` setting in a `pyproject.toml` file
+   and use the minimum version from the specified range
+2. Check for an activated or configured virtual environment
+   and use the Python version of that environment
+3. Fall back to the default value (see below)
+
+For some language features, ty can also understand conditionals based on comparisons
+with `sys.version_info`. These are commonly found in typeshed, for example,
+to reflect the differing contents of the standard library across Python versions.
 
 **Default value**: `"3.13"`
 
@@ -139,7 +132,7 @@ python-version = "3.12"
 
 ---
 
-#### [`typeshed`]
+#### `typeshed`
 
 Optional path to a "typeshed" directory on disk for us to use for standard-library types.
 If this is not provided, we will fallback to our vendored typeshed stubs for the stdlib,
@@ -160,26 +153,54 @@ typeshed = "/path/to/custom/typeshed"
 
 ## `src`
 
-#### [`root`]
+#### `respect-ignore-files`
 
-The root(s) of the project, used for finding first-party modules.
+Whether to automatically exclude files that are ignored by `.ignore`,
+`.gitignore`, `.git/info/exclude`, and global `gitignore` files.
+Enabled by default.
 
-**Default value**: `[".", "./src"]`
+**Default value**: `true`
 
-**Type**: `list[str]`
+**Type**: `bool`
 
 **Example usage** (`pyproject.toml`):
 
 ```toml
 [tool.ty.src]
-root = ["./app"]
+respect-ignore-files = false
+```
+
+---
+
+#### `root`
+
+The root of the project, used for finding first-party modules.
+
+If left unspecified, ty will try to detect common project layouts and initialize `src.root` accordingly:
+
+* if a `./src` directory exists, include `.` and `./src` in the first party search path (src layout or flat)
+* if a `./<project-name>/<project-name>` directory exists, include `.` and `./<project-name>` in the first party search path
+* otherwise, default to `.` (flat layout)
+
+Besides, if a `./tests` directory exists and is not a package (i.e. it does not contain an `__init__.py` file),
+it will also be included in the first party search path.
+
+**Default value**: `null`
+
+**Type**: `str`
+
+**Example usage** (`pyproject.toml`):
+
+```toml
+[tool.ty.src]
+root = "./app"
 ```
 
 ---
 
 ## `terminal`
 
-#### [`error-on-warning`]
+#### `error-on-warning`
 
 Use exit code 1 if there are any warning-level diagnostics.
 
@@ -199,7 +220,7 @@ error-on-warning = true
 
 ---
 
-#### [`output-format`]
+#### `output-format`
 
 The format to use for printing diagnostic messages.
 

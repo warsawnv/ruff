@@ -1,8 +1,10 @@
-use crate::checkers::ast::Checker;
-use ruff_diagnostics::{AlwaysFixableViolation, Diagnostic, Edit, Fix};
-use ruff_macros::{derive_message_formats, ViolationMetadata};
+use ruff_macros::{ViolationMetadata, derive_message_formats};
+use ruff_python_ast::parenthesize::parenthesized_range;
 use ruff_python_ast::{self as ast, Expr};
 use ruff_text_size::Ranged;
+
+use crate::checkers::ast::Checker;
+use crate::{AlwaysFixableViolation, Edit, Fix};
 
 /// ## What it does
 /// Checks for usages of `collections.deque` that have an empty iterable as the first argument.
@@ -91,7 +93,7 @@ pub(crate) fn unnecessary_literal_within_deque_call(checker: &Checker, deque: &a
         return;
     }
 
-    let mut diagnostic = Diagnostic::new(
+    let mut diagnostic = checker.report_diagnostic(
         UnnecessaryEmptyIterableWithinDequeCall {
             has_maxlen: maxlen.is_some(),
         },
@@ -99,8 +101,6 @@ pub(crate) fn unnecessary_literal_within_deque_call(checker: &Checker, deque: &a
     );
 
     diagnostic.set_fix(fix_unnecessary_literal_in_deque(checker, deque, maxlen));
-
-    checker.report_diagnostic(diagnostic);
 }
 
 fn fix_unnecessary_literal_in_deque(
@@ -108,7 +108,15 @@ fn fix_unnecessary_literal_in_deque(
     deque: &ast::ExprCall,
     maxlen: Option<&Expr>,
 ) -> Fix {
-    let deque_name = checker.locator().slice(deque.func.range());
+    let deque_name = checker.locator().slice(
+        parenthesized_range(
+            deque.func.as_ref().into(),
+            deque.into(),
+            checker.comment_ranges(),
+            checker.source(),
+        )
+        .unwrap_or(deque.func.range()),
+    );
     let deque_str = match maxlen {
         Some(maxlen) => {
             let len_str = checker.locator().slice(maxlen);
